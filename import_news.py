@@ -12,13 +12,11 @@ import numpy as np
 
 
 def get_news(news_url):
-    # ---------------------------------
-    # input
-    #  - news_url: 1ニュースのURL
-    # return
-    #  - entire_honbun: ニュースの本文
-    #    type: string
-    # ---------------------------------
+    """
+    ニュースの本文を取得する処理
+    :param news_url: 1ニュースのURL
+    :return: ニュースの本文
+    """
     try:
         f = urlopen(news_url)
     # Error because of not to exist Web page such as 404.
@@ -51,12 +49,11 @@ def get_news(news_url):
 
 
 def get_news_link(daily_url):
-    # ---------------------------------
-    # input
-    #  - daily_url: 特定の日付のnewsURLが乗っているURL
-    # return
-    #  - daily_link_ary: 特定の日付のニュースURLを配列形式で
-    # ---------------------------------
+    """
+    特定の日付のニュースURLを取得する機能
+    :param daily_url: 特定の日付のnewsURLが乗っているURL
+    :return: 特定の日付のニュースURLを配列形式で
+    """
     f = urlopen(daily_url)
     soup = BeautifulSoup(f.read(), 'lxml')
     each_news = soup.findAll('div', class_='headlineMed')
@@ -69,12 +66,11 @@ def get_news_link(daily_url):
 
 
 def get_daily_news_link(year_url):
-    # ---------------------------------
-    # input
-    #  - year_url: 日毎のニュースURLが載っているURL
-    # return
-    #  - daily_link_ary: 日毎のニュースURLを配列形式で
-    # ---------------------------------
+    """
+    日ごとのニュースURLを取得する処理
+    :param year_url: 日毎のニュースURLが載っているURL
+    :return: 日毎のニュースURLを配列形式で
+    """
     f = urlopen(year_url)
     soup = BeautifulSoup(f.read(), 'lxml')
     daily_link = soup.findAll('p')
@@ -87,44 +83,42 @@ def get_daily_news_link(year_url):
     return daily_link_ary
 
 
-# ---------------
-# MAIN FUNCTION
-# ---------------
-year_ary = [y for y in range(2016, 2019, 1)]
-# get each Year
-for year in year_ary:
-    print('Year:\t' + str(year))
-    daily_link = get_daily_news_link('https://www.reuters.com/resources/archive/us/' + str(year) + '.html')
-    # get each day newses.
-    for daily in daily_link:
-        print('\tDaily:\t' + daily)
-        # URLから日付情報を抜き出す処理
-        # e.g.
-        # INPUT  :https://www.reuters.com/resources/archive/us/20161227.html
-        # OUTPUT :20161227
-        day = np.array(daily.split('/')[-1].split('.')[0])
-        # news already exist in data folder is skipped.
-        output = './data/daily_news' + str(day) + '.txt'
-        newsURL = get_news_link(daily)
-        # ファイルが存在し、かつ、ファイルに書き出したnews数と
-        # reutersサイトにあるnews数の差が10件より少なければスキップする
-        if os.path.isfile(output) and (len(newsURL) - len([s for s in newsURL if 'http://www.reuters.com/news/video' in s])) - sum(1 for i in open(output, 'r')) < 10:
-            print('\t\t-> Skipped')
-            # print(len(newsURL) - len([s for s in newsURL if 'http://www.reuters.com/news/video' in s]))
-            # print(sum(1 for i in open(output, 'r')))
-            continue
-        fw = codecs.open(output, 'w', 'utf-8')
-        # get each news in the day.
-        for each_news_url in newsURL:
-            print('\t\tnow getting news from:\t' + each_news_url)
-            # skip getting char of video news URL.
-            if 'news/video' in each_news_url:
-                print('\t\t- Skipped because it is video news.')
-                main_article = ''
-            else:
-                # GET news.
-                main_article = get_news(each_news_url)
-            if not main_article == '':
-                fw.write(main_article)
-        fw.close()
-# print(get_news("https://www.reuters.com/article/hkn-oilers-jets-writethru-idUSMTZECC2JEEOD1"))
+if __name__ == '__main__':
+    year_ary = [y for y in range(2016, 2019, 1)]
+    # get each Year
+    for year in year_ary:
+        print('Year:\t' + str(year))
+        daily_link = get_daily_news_link('https://www.reuters.com/resources/archive/us/' + str(year) + '.html')
+        # get each day newses.
+        for daily in daily_link:
+            print('\tDaily:\t' + daily)
+            # URLから日付情報を抜き出す処理
+            # e.g.
+            # INPUT  :https://www.reuters.com/resources/archive/us/20161227.html
+            # OUTPUT :20161227
+            day = np.array(daily.split('/')[-1].split('.')[0])
+            # news already exist in data folder is skipped.
+            output = './data/daily_news' + str(day) + '.txt'
+            newsURL = get_news_link(daily)
+            # ファイルが存在し、かつ、ファイルに書き出したnews数と
+            # reutersサイトにあるnews数の差が10件より少なければスキップする
+            if os.path.isfile(output) and (len(newsURL) - len([s for s in newsURL if 'http://www.reuters.com/news/video' in s])) - sum(1 for i in open(output, 'r')) < 10:
+                print('\t\t-> Skipped')
+                # print(len(newsURL) - len([s for s in newsURL if 'http://www.reuters.com/news/video' in s]))
+                # print(sum(1 for i in open(output, 'r')))
+                continue
+            fw = codecs.open(output, 'w', 'utf-8')
+            # get each news in the day.
+            for each_news_url in newsURL:
+                print('\t\tnow getting news from:\t' + each_news_url)
+                # skip getting char of video news URL.
+                if 'news/video' in each_news_url:
+                    print('\t\t- Skipped because it is video news.')
+                    main_article = ''
+                else:
+                    # GET news.
+                    main_article = get_news(each_news_url)
+                if not main_article == '':
+                    fw.write(main_article)
+            fw.close()
+    # print(get_news("https://www.reuters.com/article/hkn-oilers-jets-writethru-idUSMTZECC2JEEOD1"))
