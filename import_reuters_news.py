@@ -5,6 +5,7 @@ import urllib
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import re
+from tqdm import tqdm
 import codecs
 import os
 import numpy as np
@@ -52,14 +53,18 @@ class GetReutersNews:
         for news in each_news:
             t = news.findAll('time')  # Get date.
             p = news.findAll('p')  # Get abstract.
-            a = news.findAll('a')  # Get Link
+            tmp_a = news.findAll('a')  # Get Link
+            a = []
+            for link in tmp_a:
+                a.append(link.attrs['href'])
+            a = a[::2]
 
             for _t, _p, _a in zip(t, p, a):
                 one_news_info_ary = []
                 one_news_info_ary.append(self.r.sub('', str(_t).replace('\n', '')))
                 one_news_info_ary.append(self.r.sub('', str(_p).replace('\n', '')))
-                one_news_info_ary.append(str('https://jp.reuters.com') + str(_a.attrs['href']))  # e.g. https://jp.reuters.com/article/idJPJAPAN-21788920110620
-                honbun = self.get_news(str('https://jp.reuters.com') + str(_a.attrs['href']))
+                one_news_info_ary.append(str('https://jp.reuters.com') + str(_a))  # e.g. https://jp.reuters.com/article/idJPJAPAN-21788920110620
+                honbun = self.get_news(str('https://jp.reuters.com') + str(_a))
                 one_news_info_ary.append(honbun)
                 news_ary.append(one_news_info_ary)
         return news_ary
@@ -68,9 +73,12 @@ class GetReutersNews:
 if __name__ == '__main__':
     getreuters = GetReutersNews()
     with open('output.csv', 'w') as f:
-        for page in range(1, 3000):
+        for page in tqdm(range(1, 10)):
             page_link = getreuters.get_each_page_news_title_and_link('https://jp.reuters.com/news/archive/?view=page&page=' + str(page) + '&pageSize=10')
             for each_news in page_link:
-                f.writelines(','.join(each_news) + '\n')
+                try:
+                    f.writelines(','.join(each_news) + '\n')
+                except:
+                    continue
         f.close()
 
