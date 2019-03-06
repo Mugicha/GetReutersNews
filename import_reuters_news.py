@@ -6,9 +6,6 @@ from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import re
 from tqdm import tqdm
-import codecs
-import os
-import numpy as np
 
 
 class GetReutersNews:
@@ -73,7 +70,7 @@ class GetReutersNews:
 if __name__ == '__main__':
     getreuters = GetReutersNews()
     with open('output.csv', 'w') as f:
-        for page in tqdm(range(1, 10)):
+        for page in tqdm(range(1, 3000)):
             page_link = getreuters.get_each_page_news_title_and_link('https://jp.reuters.com/news/archive/?view=page&page=' + str(page) + '&pageSize=10')
             for each_news in page_link:
                 try:
