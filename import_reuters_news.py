@@ -6,6 +6,7 @@ from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import re
 from tqdm import tqdm
+import pandas as pd
 
 
 class GetReutersNews:
@@ -69,13 +70,15 @@ class GetReutersNews:
 
 if __name__ == '__main__':
     getreuters = GetReutersNews()
-    with open('output.csv', 'w') as f:
-        for page in tqdm(range(1, 3000)):
-            page_link = getreuters.get_each_page_news_title_and_link('https://jp.reuters.com/news/archive/?view=page&page=' + str(page) + '&pageSize=10')
-            for each_news in page_link:
-                try:
-                    f.writelines(','.join(each_news) + '\n')
-                except:
-                    continue
-        f.close()
-
+    news_df = None
+    for page in tqdm(range(1, 4000)):
+        page_link = getreuters.get_each_page_news_title_and_link('https://jp.reuters.com/news/archive/?view=page&page=' + str(page) + '&pageSize=10')
+        for num, each_news in enumerate(page_link):
+            try:
+                if num == 0 and page == 1:
+                    news_df = pd.DataFrame({'Date': [str(each_news[0])], 'Summary': [str(each_news[1])], 'Link': [str(each_news[2])], 'Detail': [str(each_news[3])]}, index=[0])
+                else:
+                    news_df = news_df.append(pd.Series(data=[str(each_news[0]), str(each_news[1]), str(each_news[2]), str(each_news[3])], index=news_df.columns), ignore_index=True)
+            except:
+                continue
+    news_df.to_excel('news.xlsx', sheet_name='Reuters', index=False, encoding='utf8')
