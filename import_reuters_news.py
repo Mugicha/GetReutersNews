@@ -71,14 +71,14 @@ class GetReutersNews:
 if __name__ == '__main__':
     getreuters = GetReutersNews()
     news_df = None
-    for page in tqdm(range(1, 4000)):
-        page_link = getreuters.get_each_page_news_title_and_link('https://jp.reuters.com/news/archive/?view=page&page=' + str(page) + '&pageSize=10')
+    for page in tqdm(range(1, 100)):
+        try:
+            page_link = getreuters.get_each_page_news_title_and_link('https://jp.reuters.com/news/archive/?view=page&page=' + str(page) + '&pageSize=10')
+        except:
+            continue
         for num, each_news in enumerate(page_link):
-            try:
-                if num == 0 and page == 1:
-                    news_df = pd.DataFrame({'Date': [str(each_news[0])], 'Summary': [str(each_news[1])], 'Link': [str(each_news[2])], 'Detail': [str(each_news[3])]}, index=[0])
-                else:
-                    news_df = news_df.append(pd.Series(data=[str(each_news[0]), str(each_news[1]), str(each_news[2]), str(each_news[3])], index=news_df.columns), ignore_index=True)
-            except:
-                continue
+            if num == 0 and page == 1:
+                news_df = pd.DataFrame({'Date': [str(each_news[0])], 'Summary': [str(each_news[1])], 'Link': [str(each_news[2])], 'Detail': [str(each_news[3])]}, index=[0])
+            else:
+                news_df = news_df.append(pd.Series(data=[str(each_news[0]), str(each_news[1]), str(each_news[2]), str(each_news[3])], index=news_df.columns), ignore_index=True)
     news_df.to_excel('news.xlsx', sheet_name='Reuters', index=False, encoding='utf8')
