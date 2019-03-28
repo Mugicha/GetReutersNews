@@ -5,13 +5,24 @@ import urllib
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import re
-from tqdm import tqdm
+from datetime import datetime
+from pyknp import KNP
 import pandas as pd
 
 
-class GetReutersNews:
+class GetNFudosanNews:
     def __init__(self):
         self.r = re.compile(r"<[^>]*?>")
+        self.knp = KNP(option='-tab -anaphora')
+
+    @staticmethod
+    def nowtime():
+        """
+        今の時間をstr形式で返すだけの関数
+        :return:
+        """
+        from datetime import datetime
+        return str(datetime.now().strftime('%Y年%m月%d日'))
 
     def get_news(self, news_url):
         """
@@ -38,60 +49,186 @@ class GetReutersNews:
                 entire_honbun = entire_honbun + self.r.sub('', str(ptag).replace('\n', '').replace(',', ''))
         return entire_honbun
 
-    def get_each_page_news_title_and_link(self, daily_url):
+    def get_each_news_info_and_link(self, daily_url):
         """
         newsアーカイブ1ページごとに日付、概要、ニュースURLを配列で取得する機能.
         :param daily_url: newsアーカイブ記事のURL
         :return:
         """
+        # 変数定義
+        section_title_list = []
+        title_list = []
+        summary_list = []
+        link_list = []
+
         f = urlopen(daily_url)
         soup = BeautifulSoup(f.read(), 'lxml')
-        each_news = soup.findAll('div', id='mainContent')
-        # news_ary = []
-        each_section = each_news[0].findAll('section', class_='section article-index')  # Get section.
+        main = soup.findAll('div', id='mainContent')
+        news_ary = []
+        daily_list = main[0].findAll('section', class_='section article-index')  # Get section.
         # 日単位
-        for section in each_section:
-            section_title = self.r.sub('', section.find_all('h2'))
+        for daily_newses in daily_list:
             # 見出し
-            for pickup in section.find_all('section', class_='pickup-nfm'):
-                # title
-                title = self.r.sub('', pickup.find_all('h3'))
-                # summary
-                summary = self.r.sub('', pickup.find_all('p', class_='summary'))
+            section_title_tmp = daily_newses.find_all('h2')
+            if len(section_title_tmp) == 0: continue
+            section_title = self.r.sub('', str(section_title_tmp[0]))
+            if ('のニュース' not in str(section_title)) and ('新着記事一覧' not in str(section_title)): continue
+            for daily_pickup_news in daily_newses.find_all('section', class_='pickup-nfm'):
+                a = daily_pickup_news.find_all('a')
+                # 1 news内のリンク毎
+                for each_a in a:
+                    try:
+                        # title
+                        title_tmp = each_a.find_all('h3')
+                        title = self.r.sub('', str(title_tmp[0].get_text()))
+                        # summary
+                        summary_tmp = each_a.find_all('p', class_='summary')
+                        summary = self.r.sub('', str(summary_tmp[0].get_text()))
+                        # link
+                        link = each_a.attrs['href']
+                        # append if all info above is corrected.
+                        section_title_list.append(section_title)
+                        title_list.append(title)
+                        summary_list.append(summary)
+                        link_list.append(link)
+                    except:
+                        continue
             # その他
-            for pickup in section.find_all('ul', class_='list-type1'):
+            other_news = daily_newses.find_all('ul', class_='list-type1')
+            # 1 news毎
+            for daily_other_news in other_news[0].find_all('li'):
+                a = daily_other_news.find_all('a')
+                # 1 news内のリンク毎
+                for each_a in a:
+                    # 関連記事のリンクを避ける為にtryを置く
+                    try:
+                        # title
+                        title_tmp = each_a.find_all('h3')
+                        title = self.r.sub('', str(title_tmp[0].get_text()))
+                        # summary
+                        summary_tmp = each_a.find_all('p', class_='summary')
+                        summary = self.r.sub('', summary_tmp[0].get_text())
+                        # link
+                        link = each_a.attrs['href']
+                        # append if all info above is corrected.
+                        section_title_list.append(section_title)
+                        title_list.append(title)
+                        summary_list.append(summary)
+                        link_list.append(link)
+                    except:
+                        continue
+        for _st, _t, _s, _a in zip(section_title_list, title_list, summary_list, link_list):
+            one_news_info_ary = []
+            title = self.r.sub('', str(_st).replace('\n', ''))
+            if title == '新着記事一覧':
+                title = self.nowtime()
+            if 'のニュース一覧' in title:
+                title = title.replace('のニュース一覧', '')
+                tdatetime = datetime.strptime(title, '%m月%d日')
+                tdatetime = tdatetime.replace(year=2019)
+                title = tdatetime.strftime('%Y年%m月%d日')
+            one_news_info_ary.append(title)
+            one_news_info_ary.append(self.r.sub('', str(_t).replace('\n', '')))
+            one_news_info_ary.append(self.r.sub('', str(_s).replace('\n', '')))
+            one_news_info_ary.append(str('https://tech.nikkeibp.co.jp') + str(_a))  # e.g. https://tech.nikkeibp.co.jp/kn/atcl/nfmnews/15/032705201/
+            news_ary.append(one_news_info_ary)
 
+        return news_ary
 
-        #     p = news.findAll('p')  # Get abstract.
-        #     tmp_a = news.findAll('a')  # Get Link
-        #     a = []
-        #     for link in tmp_a:
-        #         a.append(link.attrs['href'])
-        #     a = a[::2]
-        #
-        #     for _t, _p, _a in zip(t, p, a):
-        #         one_news_info_ary = []
-        #         one_news_info_ary.append(self.r.sub('', str(_t).replace('\n', '')))
-        #         one_news_info_ary.append(self.r.sub('', str(_p).replace('\n', '')))
-        #         one_news_info_ary.append(str('https://jp.reuters.com') + str(_a))  # e.g. https://jp.reuters.com/article/idJPJAPAN-21788920110620
-        #         honbun = self.get_news(str('https://jp.reuters.com') + str(_a))
-        #         one_news_info_ary.append(honbun)
-        #         news_ary.append(one_news_info_ary)
-        # return news_ary
+    def analyse(self, line):
+        """
+        構文解析を行う機能
+        :param line:
+        :return:
+        """
+        # 解析
+        result = self.knp.parse(line)
+        # search parent_id = -1
+        parent = None
+        for res in result._bnst:
+            if res.parent_id == -1: parent = res.bnst_id
+        # 格解析結果を取得
+        kaku_analyse_result = result._bnst[int(parent)]._tag_list._tag[0].features['格解析結果']
+        """
+        # MEMO 格要素郡(kaku_elements)の例 #
+        ['ガ/C/会社/5/0/1',
+         'ヲ/C/持分/12/0/1',
+         'ニ/U/-/-/-/-',
+         'ト/U/-/-/-/-',
+         'デ/U/-/-/-/-',
+         'カラ/U/-/-/-/-',
+         'ヨリ/U/-/-/-/-',
+         'マデ/U/-/-/-/-',
+         'ヘ/U/-/-/-/-',
+         '時間/U/-/-/-/-',
+         '外の関係/U/-/-/-/-',
+         'ノ/U/-/-/-/-',
+         '修飾/U/-/-/-/-',
+         'ニヨル/U/-/-/-/-',
+         'トスル/U/-/-/-/-',
+         'ニオク/U/-/-/-/-',
+         'ヲハジメル/U/-/-/-/-',
+         'ニツク/U/-/-/-/-',
+         'ヲツウジル/U/-/-/-/-',
+         'ニクワエル/U/-/-/-/-']
+         """
+        kaku_elements = kaku_analyse_result.split(':')[-1].split(';')
+        print(kaku_elements)
+        kaku_elements_dic = {}
+        for element in kaku_elements:
+            element_detail = element.split('/')
+            kaku_elements_dic[element_detail[0]] = element_detail[1:]
+        ######################
+        # ガ格を取得
+        ######################
+        ga_kaku = kaku_elements_dic['ガ'][1]
+        # ガ格の全体を取得
+        ga_kaku_bnst_midasi = None
+        ga_kaku_bnst_id = None
+        for res in result._bnst:
+            head_repname = res.head_repname.split('/')[0]  # '会社/かいしゃ'
+            if head_repname == ga_kaku:
+                ga_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
+                ga_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in ga_kaku_bnst_midasi_tmp])
+                ga_kaku_bnst_id = res.bnst_id
+        for res in result._bnst:
+            if res.parent_id == ga_kaku_bnst_id:
+                ga_kaku_bnst_midasi = res.midasi + ga_kaku_bnst_midasi
+        ######################
+        # ヲ格を取得
+        ######################
+        wo_kaku = kaku_elements_dic['ヲ'][1]  # type: str
+        wo_kaku_bnst_midasi = None
+        wo_kaku_bnst_id = None
+        for res in result._bnst:
+            head_repname = res.head_repname.split('/')[0]
+            if head_repname == wo_kaku:
+                wo_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
+                wo_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in wo_kaku_bnst_midasi_tmp])
+                wo_kaku_bnst_id = res.bnst_id
+        for res in result._bnst:
+            if res.parent_id == wo_kaku_bnst_id:
+                wo_kaku_bnst_midasi = res.midasi + wo_kaku_bnst_midasi
+        return ga_kaku_bnst_midasi, wo_kaku_bnst_midasi
 
 
 if __name__ == '__main__':
-    getreuters = GetReutersNews()
+    get_nikkei_fudosan = GetNFudosanNews()
     news_df = None
-    # for page in tqdm(range(1, 3)):
-    page_link = getreuters.get_each_page_news_title_and_link('https://tech.nikkeibp.co.jp/kn/NFM/')
-    #     for num, each_news in enumerate(page_link):
-    #         page_link = getreuters.get_each_page_news_title_and_link('https://jp.reuters.com/news/archive/?view=page&page=' + str(page) + '&pageSize=10')
-    #         try:
-    #             if num == 0 and page == 1:
-    #                 news_df = pd.DataFrame({'Date': [str(each_news[0])], 'Summary': [str(each_news[1])], 'Link': [str(each_news[2])], 'Detail': [str(each_news[3])]}, index=[0])
-    #             else:
-    #                 news_df.append(pd.Series(data=[str(each_news[0]), str(each_news[1]), str(each_news[2]), str(each_news[3])], index=news_df.columns), ignore_index=True)
-    #         except:
-    #             continue
-    # news_df.to_excel('news.xlsx', sheet_name='Reuters', index=False, encoding='utf8')
+    page_link = get_nikkei_fudosan.get_each_news_info_and_link('https://tech.nikkeibp.co.jp/kn/NFM/')
+    for num, each_news in enumerate(page_link):
+        try:
+            if num == 0:
+                news_df = pd.DataFrame({'Date': [str(each_news[0])], 'Title': [str(each_news[1])], 'Summary': [str(each_news[2])], 'Link': [str(each_news[3])]}, index=[0])
+                news_df = news_df.loc[:, ['Date', 'Title', 'Summary', 'Link']]  # sort columns
+            else:
+                news_df = news_df.append(pd.Series(data=[str(each_news[0]), str(each_news[1]), str(each_news[2]), str(each_news[3])], index=['Date', 'Title', 'Summary', 'Link']), ignore_index=True)
+        except:
+            continue
+    news_df.to_excel('news_nikkei_fudosan.xlsx', sheet_name='Reuters', index=False, encoding='utf8')
+    for idx, row in news_df.iterrows():
+        print(str(row['Summary']).split('。')[0])
+        ga, wo = get_nikkei_fudosan.analyse(str(row['Summary']).split('。')[0])
+        print('Who:   ' + str(ga))
+        print('Where: ' + str(wo))
+        print('----------------------')
