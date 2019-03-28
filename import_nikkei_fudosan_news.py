@@ -13,6 +13,7 @@ import pandas as pd
 class GetNFudosanNews:
     def __init__(self):
         self.r = re.compile(r"<[^>]*?>")
+        self.r_corp = re.compile(r"（.*）")
         self.knp = KNP(option='-tab -anaphora')
 
     @staticmethod
@@ -138,10 +139,11 @@ class GetNFudosanNews:
     def analyse(self, line):
         """
         構文解析を行う機能
-        :param line:
+        :param line: 構文解析する文章
         :return:
         """
         # 解析
+        line = self.r_corp.sub('', line)
         result = self.knp.parse(line)
         # search parent_id = -1
         parent = None
@@ -186,7 +188,7 @@ class GetNFudosanNews:
         ga_kaku_bnst_midasi = None
         ga_kaku_bnst_id = None
         for res in result._bnst:
-            head_repname = res.head_repname.split('/')[0]  # '会社/かいしゃ'
+            head_repname = res.head_repname.split('+')[-1].split('/')[0]  # '会社/かいしゃ'
             if head_repname == ga_kaku:
                 ga_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
                 ga_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in ga_kaku_bnst_midasi_tmp])
@@ -209,7 +211,12 @@ class GetNFudosanNews:
         for res in result._bnst:
             if res.parent_id == wo_kaku_bnst_id:
                 wo_kaku_bnst_midasi = res.midasi + wo_kaku_bnst_midasi
-        return ga_kaku_bnst_midasi, wo_kaku_bnst_midasi
+        ######################
+        # 動詞を取得
+        ######################
+        doushi_tmp = result._bnst[int(parent)].head_repname  # doushi_tmp: '開業/かいぎょう'
+        doushi = doushi_tmp.split('/')[0]
+        return ga_kaku_bnst_midasi, wo_kaku_bnst_midasi, doushi
 
 
 if __name__ == '__main__':
@@ -228,7 +235,8 @@ if __name__ == '__main__':
     news_df.to_excel('news_nikkei_fudosan.xlsx', sheet_name='Reuters', index=False, encoding='utf8')
     for idx, row in news_df.iterrows():
         print(str(row['Summary']).split('。')[0])
-        ga, wo = get_nikkei_fudosan.analyse(str(row['Summary']).split('。')[0])
+        ga, wo, do = get_nikkei_fudosan.analyse(str(row['Summary']).split('。')[0])
         print('Who:   ' + str(ga))
         print('Where: ' + str(wo))
+        print('What:  ' + str(do))
         print('----------------------')
