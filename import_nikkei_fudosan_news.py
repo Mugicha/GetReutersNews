@@ -13,8 +13,8 @@ import pandas as pd
 class GetNFudosanNews:
     def __init__(self):
         self.r = re.compile(r"<[^>]*?>")
-        self.r_corp = re.compile(r"（.*）")
-        self.knp = KNP(option='-tab -anaphora')
+        self.r_corp = re.compile(r"（[^）]*）")
+        self.knp = KNP(option='-tab -anaphora', jumanpp=True)
 
     @staticmethod
     def nowtime():
@@ -175,7 +175,7 @@ class GetNFudosanNews:
          'ニクワエル/U/-/-/-/-']
          """
         kaku_elements = kaku_analyse_result.split(':')[-1].split(';')
-        print(kaku_elements)
+        # print(kaku_elements)
         kaku_elements_dic = {}
         for element in kaku_elements:
             element_detail = element.split('/')
@@ -184,15 +184,18 @@ class GetNFudosanNews:
         # ガ格を取得
         ######################
         ga_kaku = kaku_elements_dic['ガ'][1]
-        # ガ格の全体を取得
+        try:  # if 'ヲ/U/-/-/-/-', can not convert to integer.
+            ga_kaku_tag_id = int(kaku_elements_dic['ガ'][2])
+        except ValueError:
+            ga_kaku_tag_id = None
         ga_kaku_bnst_midasi = None
         ga_kaku_bnst_id = None
         for res in result._bnst:
-            head_repname = res.head_repname.split('+')[-1].split('/')[0]  # '会社/かいしゃ'
-            if head_repname == ga_kaku:
-                ga_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
-                ga_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in ga_kaku_bnst_midasi_tmp])
-                ga_kaku_bnst_id = res.bnst_id
+            for tag in res._tag_list._tag:
+                if tag.normalized_repname.split('/')[0] == ga_kaku and tag.tag_id == ga_kaku_tag_id:
+                    ga_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
+                    ga_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in ga_kaku_bnst_midasi_tmp])
+                    ga_kaku_bnst_id = res.bnst_id
         for res in result._bnst:
             if res.parent_id == ga_kaku_bnst_id:
                 ga_kaku_bnst_midasi = res.midasi + ga_kaku_bnst_midasi
@@ -200,23 +203,46 @@ class GetNFudosanNews:
         # ヲ格を取得
         ######################
         wo_kaku = kaku_elements_dic['ヲ'][1]  # type: str
+        try:  # if 'ヲ/U/-/-/-/-', can not convert to integer.
+            wo_kaku_tag_id = int(kaku_elements_dic['ヲ'][2])  # type: int
+        except ValueError:
+            wo_kaku_tag_id = None
         wo_kaku_bnst_midasi = None
         wo_kaku_bnst_id = None
         for res in result._bnst:
-            head_repname = res.head_repname.split('/')[0]
-            if head_repname == wo_kaku:
-                wo_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
-                wo_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in wo_kaku_bnst_midasi_tmp])
-                wo_kaku_bnst_id = res.bnst_id
+            for tag in res._tag_list._tag:
+                if tag.normalized_repname.split('/')[0] == wo_kaku and tag.tag_id == wo_kaku_tag_id:
+                    wo_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
+                    wo_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in wo_kaku_bnst_midasi_tmp])
+                    wo_kaku_bnst_id = res.bnst_id
         for res in result._bnst:
             if res.parent_id == wo_kaku_bnst_id:
                 wo_kaku_bnst_midasi = res.midasi + wo_kaku_bnst_midasi
+        ######################
+        # 二格を取得
+        ######################
+        ni_kaku = kaku_elements_dic['ニ'][1]  # type: str
+        try:  # if 'ニ/U/-/-/-/-', can not convert to integer.
+            ni_kaku_tag_id = int(kaku_elements_dic['ニ'][2])  # type: int
+        except ValueError:
+            ni_kaku_tag_id = None
+        ni_kaku_bnst_midasi = None
+        ni_kaku_bnst_id = None
+        for res in result._bnst:
+            for tag in res._tag_list._tag:
+                if tag.normalized_repname.split('/')[0] == ni_kaku and tag.tag_id == ni_kaku_tag_id:
+                    ni_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
+                    ni_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in ni_kaku_bnst_midasi_tmp])
+                    ni_kaku_bnst_id = res.bnst_id
+        for res in result._bnst:
+            if res.parent_id == ni_kaku_bnst_id:
+                ni_kaku_bnst_midasi = res.midasi + ni_kaku_bnst_midasi
         ######################
         # 動詞を取得
         ######################
         doushi_tmp = result._bnst[int(parent)].head_repname  # doushi_tmp: '開業/かいぎょう'
         doushi = doushi_tmp.split('/')[0]
-        return ga_kaku_bnst_midasi, wo_kaku_bnst_midasi, doushi
+        return ga_kaku_bnst_midasi, wo_kaku_bnst_midasi, ni_kaku_bnst_midasi, doushi
 
 
 if __name__ == '__main__':
@@ -232,11 +258,28 @@ if __name__ == '__main__':
                 news_df = news_df.append(pd.Series(data=[str(each_news[0]), str(each_news[1]), str(each_news[2]), str(each_news[3])], index=['Date', 'Title', 'Summary', 'Link']), ignore_index=True)
         except:
             continue
-    news_df.to_excel('news_nikkei_fudosan.xlsx', sheet_name='Reuters', index=False, encoding='utf8')
+    ga_list = []
+    wo_list = []
+    ni_list = []
+    what_list = []
+    kobun_df = None
     for idx, row in news_df.iterrows():
         print(str(row['Summary']).split('。')[0])
-        ga, wo, do = get_nikkei_fudosan.analyse(str(row['Summary']).split('。')[0])
-        print('Who:   ' + str(ga))
-        print('Where: ' + str(wo))
+        ga, wo, ni, do = get_nikkei_fudosan.analyse(str(row['Summary']).split('。')[0])
+        print('ガ: ' + str(ga))
+        print('ヲ: ' + str(wo))
+        print('二: ' + str(ni))
         print('What:  ' + str(do))
         print('----------------------')
+        ga_list.append(ga)
+        wo_list.append(wo)
+        ni_list.append(ni)
+        what_list.append(do)
+        if idx == 0:
+            kobun_df = pd.DataFrame({'ガ': [ga], 'ヲ': [wo], 'ニ': [ni], 'Do': [do]}, index=[0])
+            kobun_df = kobun_df.loc[:, ['ガ', 'ヲ', 'ニ', 'Do']]  # sort columns
+        else:
+            kobun_df = kobun_df.append(pd.Series(data=[ga, wo, ni, do], index=['ガ', 'ヲ', 'ニ', 'Do']), ignore_index=True)
+    kobun_df.reset_index(drop=True, inplace=True)
+    news_df = news_df.join(kobun_df)
+    news_df.to_excel('news_nikkei_fudosan.xlsx', sheet_name='Reuters', index=False, encoding='utf8')
