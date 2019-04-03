@@ -4,6 +4,7 @@ Python PGM to get News article from https://jp.reuters.com.
 import urllib
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
+from UtilTools import file_operation
 import re
 from datetime import datetime
 from pyknp import KNP
@@ -16,6 +17,7 @@ class GetNFudosanNews:
         self.r = re.compile(r"<[^>]*?>")
         self.r_corp = re.compile(r"（[^）]*）")
         self.knp = KNP(option='-tab -anaphora', jumanpp=False)
+        self.fope = file_operation.FileOperation()
 
     @staticmethod
     def nowtime():
@@ -249,42 +251,61 @@ class GetNFudosanNews:
         doushi = doushi_tmp.split('/')[0]
         return ga_kaku_bnst_midasi, wo_kaku_bnst_midasi, ni_kaku_bnst_midasi, doushi
 
+    def export_df(self, _link, _input_file_path: str = None):
+        # init
+        _inputDF = None
+        if _input_file_path is not None:
+            _inputDF = self.fope.excel_to_df(_input_file_path)
+        # 取得したnewsのDFを作成
+        for num, each_news in enumerate(page_link):
+            # try:
+            if num == 0:
+                news_df = pd.DataFrame(
+                    {'Date': [str(each_news[0])], 'Title': [str(each_news[1])], 'Summary': [str(each_news[2])],
+                     'Link': [str(each_news[3])]}, index=[0])
+                news_df = news_df.loc[:, ['Date', 'Title', 'Summary', 'Link']]  # sort columns
+            else:
+                if _input_file_path is not None:
+                    if str(each_news[0]) in list(_inputDF['Date'].values):
+                        continue
+                news_df = news_df.append(pd.Series(data=[str(each_news[0]), str(each_news[1]), str(each_news[2]), str(each_news[3])], index=['Date', 'Title', 'Summary', 'Link']), ignore_index=True)
+            # except:
+                # continue
+        # 構文解析した結果のDFを作成
+        ga_list = []
+        wo_list = []
+        ni_list = []
+        what_list = []
+        kobun_df = None
+        for idx, row in news_df.iterrows():
+            print(str(row['Summary']).split('。')[0])
+            ga, wo, ni, do = get_nikkei_fudosan.analyse(str(row['Summary']).split('。')[0])
+            print('ガ: ' + str(ga))
+            print('ヲ: ' + str(wo))
+            print('二: ' + str(ni))
+            print('What:  ' + str(do))
+            print('----------------------')
+            ga_list.append(ga)
+            wo_list.append(wo)
+            ni_list.append(ni)
+            what_list.append(do)
+            if idx == 0:
+                kobun_df = pd.DataFrame({'ガ': [ga], 'ヲ': [wo], 'ニ': [ni], 'Do': [do]}, index=[0])
+                kobun_df = kobun_df.loc[:, ['ガ', 'ヲ', 'ニ', 'Do']]  # sort columns
+            else:
+                kobun_df = kobun_df.append(pd.Series(data=[ga, wo, ni, do], index=['ガ', 'ヲ', 'ニ', 'Do']), ignore_index=True)
+        kobun_df.reset_index(drop=True, inplace=True)
+        # 取得したnewsのDFと、構文解析した結果のDFを結合し、エクスポート
+        news_df = news_df.join(kobun_df)
+        if _input_file_path is not None:
+            news_df = news_df.append(_inputDF)
+            news_df.reset_index(drop=True, inplace=True)
+        news_df.to_excel('news_nikkei_fudosan.xlsx', sheet_name='nikkei_fudosan', index=False, encoding='utf8')
+
 
 if __name__ == '__main__':
     get_nikkei_fudosan = GetNFudosanNews()
     news_df = None
     page_link = get_nikkei_fudosan.get_each_news_info_and_link('https://tech.nikkeibp.co.jp/kn/NFM/')
-    for num, each_news in enumerate(page_link):
-        try:
-            if num == 0:
-                news_df = pd.DataFrame({'Date': [str(each_news[0])], 'Title': [str(each_news[1])], 'Summary': [str(each_news[2])], 'Link': [str(each_news[3])]}, index=[0])
-                news_df = news_df.loc[:, ['Date', 'Title', 'Summary', 'Link']]  # sort columns
-            else:
-                news_df = news_df.append(pd.Series(data=[str(each_news[0]), str(each_news[1]), str(each_news[2]), str(each_news[3])], index=['Date', 'Title', 'Summary', 'Link']), ignore_index=True)
-        except:
-            continue
-    ga_list = []
-    wo_list = []
-    ni_list = []
-    what_list = []
-    kobun_df = None
-    for idx, row in news_df.iterrows():
-        print(str(row['Summary']).split('。')[0])
-        ga, wo, ni, do = get_nikkei_fudosan.analyse(str(row['Summary']).split('。')[0])
-        print('ガ: ' + str(ga))
-        print('ヲ: ' + str(wo))
-        print('二: ' + str(ni))
-        print('What:  ' + str(do))
-        print('----------------------')
-        ga_list.append(ga)
-        wo_list.append(wo)
-        ni_list.append(ni)
-        what_list.append(do)
-        if idx == 0:
-            kobun_df = pd.DataFrame({'ガ': [ga], 'ヲ': [wo], 'ニ': [ni], 'Do': [do]}, index=[0])
-            kobun_df = kobun_df.loc[:, ['ガ', 'ヲ', 'ニ', 'Do']]  # sort columns
-        else:
-            kobun_df = kobun_df.append(pd.Series(data=[ga, wo, ni, do], index=['ガ', 'ヲ', 'ニ', 'Do']), ignore_index=True)
-    kobun_df.reset_index(drop=True, inplace=True)
-    news_df = news_df.join(kobun_df)
-    news_df.to_excel('news_nikkei_fudosan.xlsx', sheet_name='Reuters', index=False, encoding='utf8')
+    get_nikkei_fudosan.export_df(page_link, 'news_nikkei_fudosan.xlsx')
+    # get_nikkei_fudosan.export_df(page_link)
