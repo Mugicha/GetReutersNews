@@ -8,13 +8,14 @@ import re
 from datetime import datetime
 from pyknp import KNP
 import pandas as pd
+import mojimoji
 
 
 class GetNFudosanNews:
     def __init__(self):
         self.r = re.compile(r"<[^>]*?>")
         self.r_corp = re.compile(r"（[^）]*）")
-        self.knp = KNP(option='-tab -anaphora', jumanpp=True)
+        self.knp = KNP(option='-tab -anaphora', jumanpp=False)
 
     @staticmethod
     def nowtime():
@@ -85,6 +86,8 @@ class GetNFudosanNews:
                         # summary
                         summary_tmp = each_a.find_all('p', class_='summary')
                         summary = self.r.sub('', str(summary_tmp[0].get_text()))
+                        summary = mojimoji.han_to_zen(summary)
+                        summary = summary.replace('\u3000', '　')
                         # link
                         link = each_a.attrs['href']
                         # append if all info above is corrected.
@@ -109,6 +112,8 @@ class GetNFudosanNews:
                         # summary
                         summary_tmp = each_a.find_all('p', class_='summary')
                         summary = self.r.sub('', summary_tmp[0].get_text())
+                        summary = mojimoji.han_to_zen(summary)
+                        summary = summary.replace('\u3000', '　')
                         # link
                         link = each_a.attrs['href']
                         # append if all info above is corrected.
