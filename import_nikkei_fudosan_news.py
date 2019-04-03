@@ -10,6 +10,7 @@ from datetime import datetime
 from pyknp import KNP
 import pandas as pd
 import mojimoji
+import os
 
 
 class GetNFudosanNews:
@@ -307,5 +308,7 @@ if __name__ == '__main__':
     get_nikkei_fudosan = GetNFudosanNews()
     news_df = None
     page_link = get_nikkei_fudosan.get_each_news_info_and_link('https://tech.nikkeibp.co.jp/kn/NFM/')
-    get_nikkei_fudosan.export_df(page_link, 'news_nikkei_fudosan.xlsx')
-    # get_nikkei_fudosan.export_df(page_link)
+    if os.path.isfile('news_nikkei_fudosan.xlsx'):
+        get_nikkei_fudosan.export_df(page_link, 'news_nikkei_fudosan.xlsx')
+    else:
+        get_nikkei_fudosan.export_df(page_link)
