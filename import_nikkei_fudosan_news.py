@@ -10,6 +10,7 @@ from datetime import datetime
 from pyknp import KNP
 import pandas as pd
 import mojimoji
+import MeCab
 import os
 
 
@@ -17,8 +18,9 @@ class GetNFudosanNews:
     def __init__(self):
         self.r = re.compile(r"<[^>]*?>")
         self.r_corp = re.compile(r"（[^）]*）")
-        self.knp = KNP(option='-tab -anaphora', jumanpp=False)
+        self.knp = KNP(option='-tab -anaphora', jumanpp=True)
         self.fope = file_operation.FileOperation()
+        self.mecab = MeCab.Tagger()
 
     @staticmethod
     def nowtime():
@@ -144,6 +146,22 @@ class GetNFudosanNews:
 
         return news_ary
 
+    def contain_koyumeishi(self, _sentence):
+        """
+        入力文に固有名詞（地域以外）が含まれるかどうか確認する機能
+        :param _sentence:
+        :return:
+        """
+        contain = False
+        wakachi_list = self.mecab.parse(_sentence).split('\n')[:-2]
+        for w in wakachi_list:
+            _hinshi = w.split('\t')[1].split(',')
+            if _hinshi[0] == '名詞' and _hinshi[1] == '固有名詞' and _hinshi[2] != '地域':
+                contain = True
+            else:
+                continue
+        return contain
+
     def analyse(self, line):
         """
         構文解析を行う機能
@@ -153,37 +171,13 @@ class GetNFudosanNews:
         # 解析
         line = self.r_corp.sub('', line)
         result = self.knp.parse(line)
-        # search parent_id = -1
+        # parent_id が -1 の文節を検索する.
         parent = None
         for res in result._bnst:
             if res.parent_id == -1: parent = res.bnst_id
         # 格解析結果を取得
         kaku_analyse_result = result._bnst[int(parent)]._tag_list._tag[0].features['格解析結果']
-        """
-        # MEMO 格要素郡(kaku_elements)の例 #
-        ['ガ/C/会社/5/0/1',
-         'ヲ/C/持分/12/0/1',
-         'ニ/U/-/-/-/-',
-         'ト/U/-/-/-/-',
-         'デ/U/-/-/-/-',
-         'カラ/U/-/-/-/-',
-         'ヨリ/U/-/-/-/-',
-         'マデ/U/-/-/-/-',
-         'ヘ/U/-/-/-/-',
-         '時間/U/-/-/-/-',
-         '外の関係/U/-/-/-/-',
-         'ノ/U/-/-/-/-',
-         '修飾/U/-/-/-/-',
-         'ニヨル/U/-/-/-/-',
-         'トスル/U/-/-/-/-',
-         'ニオク/U/-/-/-/-',
-         'ヲハジメル/U/-/-/-/-',
-         'ニツク/U/-/-/-/-',
-         'ヲツウジル/U/-/-/-/-',
-         'ニクワエル/U/-/-/-/-']
-         """
         kaku_elements = kaku_analyse_result.split(':')[-1].split(';')
-        # print(kaku_elements)
         kaku_elements_dic = {}
         for element in kaku_elements:
             element_detail = element.split('/')
@@ -200,13 +194,21 @@ class GetNFudosanNews:
         ga_kaku_bnst_id = None
         for res in result._bnst:
             for tag in res._tag_list._tag:
-                if tag.normalized_repname.split('/')[0] == ga_kaku and tag.tag_id == ga_kaku_tag_id:
+                # '横浜/よこはま' + '市/し' のパターンと、'皆/みんな'のパターンでifを分岐させる.
+                # 前者の場合、+で区切られた後半を見るようにする.
+                # normalized_repname.split('/')[0] in ga_kaku -> リアルタ in リアルター のようにjuman? knp?が揺れを消しているため==じゃなくてinを使う
+                if ('+' not in tag.normalized_repname and ga_kaku in tag.midasi and tag.tag_id == ga_kaku_tag_id) or\
+                        ('+' in tag.normalized_repname and ga_kaku in tag.midasi and tag.tag_id == ga_kaku_tag_id):
                     ga_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
                     ga_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in ga_kaku_bnst_midasi_tmp])
                     ga_kaku_bnst_id = res.bnst_id
+        ga_kaku_parent = self.contain_koyumeishi(ga_kaku_bnst_midasi)
         for res in result._bnst:
             if res.parent_id == ga_kaku_bnst_id:
-                ga_kaku_bnst_midasi = res.midasi + ga_kaku_bnst_midasi
+                ga_kaku_child = self.contain_koyumeishi(res.midasi)
+                if not (ga_kaku_parent and not ga_kaku_child):
+                    ga_kaku_bnst_midasi = res.midasi + ga_kaku_bnst_midasi
+
         ######################
         # ヲ格を取得
         ######################
@@ -219,13 +221,35 @@ class GetNFudosanNews:
         wo_kaku_bnst_id = None
         for res in result._bnst:
             for tag in res._tag_list._tag:
-                if tag.normalized_repname.split('/')[0] == wo_kaku and tag.tag_id == wo_kaku_tag_id:
+                if wo_kaku in tag.midasi and tag.tag_id == wo_kaku_tag_id:
                     wo_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
                     wo_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in wo_kaku_bnst_midasi_tmp])
                     wo_kaku_bnst_id = res.bnst_id
+        # 一つ後の文節(parent)を取得
+        # この処理がない場合、「持分50%を取得した」のヲ格が「持分50%」としたいところ、「持分」だけになってしまう
+        if wo_kaku_bnst_id is not None:
+            if kaku_analyse_result.split(':')[0].split('/')[0] not in result._bnst[int(wo_kaku_bnst_id)].parent.midasi:
+                _tmp = result._bnst[int(wo_kaku_bnst_id)].parent.normalized_repname.split('+')
+                _tmp = [x.split('/')[0] for x in _tmp]
+                wo_kaku_bnst_midasi = wo_kaku_bnst_midasi + ''.join(_tmp)
+        # 一つ前の文節(children)を取得
         for res in result._bnst:
             if res.parent_id == wo_kaku_bnst_id:
                 wo_kaku_bnst_midasi = res.midasi + wo_kaku_bnst_midasi
+                # 一つ前の文節が、用言：動詞　であれば、その文節のニ格やヲ格も同時に取得して結合する.
+                # これをしないと、「六本木にあるビル」を「あるビル」として抽出してしまう.
+                if '<用言:動>' in res.fstring:
+                    # _tag[-1]にしているのは、_tag_listが複数あった場合、['項構造']が含まれるのは最後のtag要素であるから.
+                    _tmp = res._tag_list._tag[-1].features['項構造'].split(':')[2]  # ['有る/ある', '動3', 'ガ/N/ビル/37;ニ/C/千代田区神田神保町/35']
+                    try:
+                        _tmp = [x.split('/')[2] for x in _tmp.split(';') if x.split('/')[0] == 'ニ'][0]
+                        wo_kaku_bnst_midasi = _tmp + 'に' + wo_kaku_bnst_midasi
+                    except:
+                        try:
+                            _tmp = [x.split('/')[2] for x in _tmp.split(';') if x.split('/')[0] == 'ヲ'][0]
+                            wo_kaku_bnst_midasi = _tmp + 'を' + wo_kaku_bnst_midasi
+                        except:
+                            pass
         ######################
         # 二格を取得
         ######################
@@ -238,13 +262,19 @@ class GetNFudosanNews:
         ni_kaku_bnst_id = None
         for res in result._bnst:
             for tag in res._tag_list._tag:
-                if tag.normalized_repname.split('/')[0] == ni_kaku and tag.tag_id == ni_kaku_tag_id:
+                if ni_kaku in tag.midasi and tag.tag_id == ni_kaku_tag_id:
                     ni_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
                     ni_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in ni_kaku_bnst_midasi_tmp])
                     ni_kaku_bnst_id = res.bnst_id
         for res in result._bnst:
             if res.parent_id == ni_kaku_bnst_id:
                 ni_kaku_bnst_midasi = res.midasi + ni_kaku_bnst_midasi
+                # 地名だったら、更にそのchildまで取得する. 例：２丁目の渋谷ソラスタ -> 渋谷区道玄坂２丁目の渋谷ソラスタ
+                try:
+                    if res.features['カウンタ'] == '丁目':
+                        ni_kaku_bnst_midasi = res.children[0].midasi + ni_kaku_bnst_midasi
+                except:
+                    continue
         ######################
         # 動詞を取得
         ######################
@@ -253,6 +283,12 @@ class GetNFudosanNews:
         return ga_kaku_bnst_midasi, wo_kaku_bnst_midasi, ni_kaku_bnst_midasi, doushi
 
     def export_df(self, _link, _input_file_path: str = None):
+        """
+        DataFrameをエクスポートする機能.
+        :param _link:
+        :param _input_file_path:
+        :return:
+        """
         # init
         _inputDF = None
         if _input_file_path is not None:
@@ -261,13 +297,11 @@ class GetNFudosanNews:
         for num, each_news in enumerate(page_link):
             # try:
             if num == 0:
-                news_df = pd.DataFrame(
-                    {'Date': [str(each_news[0])], 'Title': [str(each_news[1])], 'Summary': [str(each_news[2])],
-                     'Link': [str(each_news[3])]}, index=[0])
+                news_df = pd.DataFrame({'Date': [str(each_news[0])], 'Title': [str(each_news[1])], 'Summary': [str(each_news[2])], 'Link': [str(each_news[3])]}, index=[0])
                 news_df = news_df.loc[:, ['Date', 'Title', 'Summary', 'Link']]  # sort columns
             else:
                 if _input_file_path is not None:
-                    if str(each_news[0]) in list(_inputDF['Date'].values):
+                    if str(each_news[0]) in list(_inputDF['Date'].values) and str(each_news[1]) in list(_inputDF['Title'].values):
                         continue
                 news_df = news_df.append(pd.Series(data=[str(each_news[0]), str(each_news[1]), str(each_news[2]), str(each_news[3])], index=['Date', 'Title', 'Summary', 'Link']), ignore_index=True)
             # except:
@@ -301,14 +335,57 @@ class GetNFudosanNews:
         if _input_file_path is not None:
             news_df = news_df.append(_inputDF)
             news_df.reset_index(drop=True, inplace=True)
-        news_df.to_excel('news_nikkei_fudosan.xlsx', sheet_name='nikkei_fudosan', index=False, encoding='utf8')
+        news_df.to_excel('../news_nikkei_fudosan.xlsx', sheet_name='nikkei_fudosan', index=False, encoding='utf8')
+
+    def re_analyse(self, _input_file_path: str):
+        """
+        すでにエクスポートしたエクセルファイルを、再度読み込み再度解析する機能
+        解析ロジックが変わったときに、過去のデータを一括で治すために使う
+        :param _input_file_path:
+        :return:
+        """
+        _inputDF = self.fope.excel_to_df(_input_file_path)
+        _inputDF = _inputDF[['Date', 'Title', 'Summary', 'Link']]
+        ga_list = []
+        wo_list = []
+        ni_list = []
+        what_list = []
+        kobun_df = None
+        for idx, row in _inputDF.iterrows():
+            summary = str(row['Summary']).split('。')[0]
+            summary = mojimoji.han_to_zen(summary)
+            print(summary)
+            ga, wo, ni, do = get_nikkei_fudosan.analyse(summary)
+            print('ガ: ' + str(ga))
+            print('ヲ: ' + str(wo))
+            print('二: ' + str(ni))
+            print('What:  ' + str(do))
+            print('----------------------')
+            ga_list.append(ga)
+            wo_list.append(wo)
+            ni_list.append(ni)
+            what_list.append(do)
+            if idx == 0:
+                kobun_df = pd.DataFrame({'ガ': [ga], 'ヲ': [wo], 'ニ': [ni], 'Do': [do]}, index=[0])
+                kobun_df = kobun_df.loc[:, ['ガ', 'ヲ', 'ニ', 'Do']]  # sort columns
+            else:
+                kobun_df = kobun_df.append(pd.Series(data=[ga, wo, ni, do], index=['ガ', 'ヲ', 'ニ', 'Do']),
+                                           ignore_index=True)
+        kobun_df.reset_index(drop=True, inplace=True)
+        # 取得したnewsのDFと、構文解析した結果のDFを結合し、エクスポート
+        news_df = _inputDF.join(kobun_df)
+        news_df.to_excel('../news_nikkei_fudosan_redo.xlsx', sheet_name='nikkei_fudosan', index=False, encoding='utf8')
 
 
 if __name__ == '__main__':
+    typ = 'redo'  # redo or do
+    link = '../news_nikkei_fudosan.xlsx'
     get_nikkei_fudosan = GetNFudosanNews()
-    news_df = None
-    page_link = get_nikkei_fudosan.get_each_news_info_and_link('https://tech.nikkeibp.co.jp/kn/NFM/')
-    if os.path.isfile('news_nikkei_fudosan.xlsx'):
-        get_nikkei_fudosan.export_df(page_link, 'news_nikkei_fudosan.xlsx')
-    else:
-        get_nikkei_fudosan.export_df(page_link)
+    if typ == 'do':
+        page_link = get_nikkei_fudosan.get_each_news_info_and_link('https://tech.nikkeibp.co.jp/kn/NFM/')
+        if os.path.isfile(link):
+            get_nikkei_fudosan.export_df(page_link, link)
+        else:
+            get_nikkei_fudosan.export_df(page_link)
+    elif typ == 'redo':
+        get_nikkei_fudosan.re_analyse('../news_nikkei_fudosan_bef.xlsx')
