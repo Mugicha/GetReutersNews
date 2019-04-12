@@ -397,8 +397,8 @@ class GetNFudosanNews:
 
 
 if __name__ == '__main__':
-    typ = 'redo'  # redo or do
-    link = '../news_nikkei_fudosan.xlsx'
+    typ = 'do'  # redo or do
+    link = '../news_nikkei_fudosan_redo.xlsx'
     get_nikkei_fudosan = GetNFudosanNews()
     if typ == 'do':
         page_link = get_nikkei_fudosan.get_each_news_info_and_link('https://tech.nikkeibp.co.jp/kn/NFM/')

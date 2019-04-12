@@ -4,6 +4,7 @@ Python PGM to get News article from https://tech.nikkeibp.co.jp/
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 from UtilTools import file_operation
+from UtilTools import natural_language
 import re
 from pyknp import KNP
 from tqdm import tqdm
@@ -18,6 +19,7 @@ class GetNTechNews:
         self.r_time = re.compile(r" \(.*\)")
         self.knp = KNP(option='-tab -anaphora', jumanpp=True)
         self.fope = file_operation.FileOperation()
+        self.nal = natural_language.NaturalLang()
         self.mecab = MeCab.Tagger()
 
     def get_each_news_info_and_link(self, daily_url):
@@ -83,6 +85,12 @@ class GetNTechNews:
 
         return news_ary
 
+    def create_histogram(self, _input_path: str):
+        _df = self.fope.excel_to_df(_input_path=_input_path)
+
+        histogram = self.nal.create_histogram(_df=_df, _column='Snippet', _typ='meishi')
+        print('done')
+
 
 if __name__ == '__main__':
     get_nikkei_tech = GetNTechNews()
@@ -100,4 +108,8 @@ if __name__ == '__main__':
             else:
                 kobun_df = kobun_df.append(pd.Series(data=[each_news[0], each_news[1], each_news[2], each_news[3], each_news[4]], index=['Date', 'Title', 'Snippet', 'link', 'honbun']), ignore_index=True)
         kobun_df.reset_index(drop=True, inplace=True)
-    get_nikkei_tech.fope.df_to_excel(kobun_df, _output_file='export.xlsx')
+        # 途中経過
+        if i % 500 == 0: get_nikkei_tech.fope.df_to_excel(kobun_df, _output_file='../export_' + str(i) + '.xlsx')
+
+    get_nikkei_tech.fope.df_to_excel(kobun_df, _output_file='../export.xlsx')
+    # get_nikkei_tech.create_histogram('../news_nikkei_tech.xlsx')
