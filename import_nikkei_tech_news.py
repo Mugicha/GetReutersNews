@@ -87,29 +87,34 @@ class GetNTechNews:
 
     def create_histogram(self, _input_path: str):
         _df = self.fope.excel_to_df(_input_path=_input_path)
-
-        histogram = self.nal.create_histogram(_df=_df, _column='Snippet', _typ='meishi')
+        _df.drop_duplicates(inplace=True)
+        output_dic = {}
+        for y in range(2010, 2020):
+            tmp = _df.query('Date.str.startswith("' + str(y) + '")')
+            histogram = self.nal.create_histogram(_df=tmp, _column='Snippet', _typ='meishi', _op='../const/mecab-user-dict-seed.20181022.dic')  # type: pd.DataFrame
+            output_dic[str(y)] = histogram
+        self.fope.multiple_df_to_excel(_output_dir='./', _output_file='nikkei_tech_histogram.xlsx', _output_df_list=output_dic)
         print('done')
 
 
 if __name__ == '__main__':
     get_nikkei_tech = GetNTechNews()
-    kobun_df = None
-    for i in tqdm(range(1, 9884)):
-        try:
-            page_link = get_nikkei_tech.get_each_news_info_and_link('https://www.nikkei.com/technology/archive/?bn=' + str(i))
-        except:
-            print('error: page' + str(i))
-            continue
-        for idx, each_news in enumerate(page_link):
-            if i == 1 and idx == 0:
-                kobun_df = pd.DataFrame({'Date': [each_news[0]], 'Title': [each_news[1]], 'Snippet': [each_news[2]], 'link': [each_news[3]], 'honbun': [each_news[4]]}, index=[0])
-                kobun_df = kobun_df.loc[:, ['Date', 'Title', 'Snippet', 'link', 'honbun']]  # sort columns
-            else:
-                kobun_df = kobun_df.append(pd.Series(data=[each_news[0], each_news[1], each_news[2], each_news[3], each_news[4]], index=['Date', 'Title', 'Snippet', 'link', 'honbun']), ignore_index=True)
-        kobun_df.reset_index(drop=True, inplace=True)
-        # 途中経過
-        if i % 500 == 0: get_nikkei_tech.fope.df_to_excel(kobun_df, _output_file='../export_' + str(i) + '.xlsx')
-
-    get_nikkei_tech.fope.df_to_excel(kobun_df, _output_file='../export.xlsx')
-    # get_nikkei_tech.create_histogram('../news_nikkei_tech.xlsx')
+    # kobun_df = None
+    # for i in tqdm(range(1, 9884)):
+    #     try:
+    #         page_link = get_nikkei_tech.get_each_news_info_and_link('https://www.nikkei.com/technology/archive/?bn=' + str(i))
+    #     except:
+    #         print('error: page' + str(i))
+    #         continue
+    #     for idx, each_news in enumerate(page_link):
+    #         if i == 1 and idx == 0:
+    #             kobun_df = pd.DataFrame({'Date': [each_news[0]], 'Title': [each_news[1]], 'Snippet': [each_news[2]], 'link': [each_news[3]], 'honbun': [each_news[4]]}, index=[0])
+    #             kobun_df = kobun_df.loc[:, ['Date', 'Title', 'Snippet', 'link', 'honbun']]  # sort columns
+    #         else:
+    #             kobun_df = kobun_df.append(pd.Series(data=[each_news[0], each_news[1], each_news[2], each_news[3], each_news[4]], index=['Date', 'Title', 'Snippet', 'link', 'honbun']), ignore_index=True)
+    #     kobun_df.reset_index(drop=True, inplace=True)
+    #     # 途中経過
+    #     if i % 1000 == 0: get_nikkei_tech.fope.df_to_excel(kobun_df, _output_file='../export_' + str(i) + '.xlsx')
+    #
+    # get_nikkei_tech.fope.df_to_excel(kobun_df, _output_file='../export.xlsx')
+    get_nikkei_tech.create_histogram('../Nikkei_Tech/export_Nikkei_tech.xlsx')
