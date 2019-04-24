@@ -176,7 +176,12 @@ class GetNFudosanNews:
         for res in result._bnst:
             if res.parent_id == -1: parent = res.bnst_id
         # 格解析結果を取得
-        kaku_analyse_result = result._bnst[int(parent)]._tag_list._tag[0].features['格解析結果']
+        try:
+            kaku_analyse_result = result._bnst[int(parent)]._tag_list._tag[0].features['格解析結果']
+        except KeyError:
+            # 下記のように、文章が途中で省略されている場合、格解析結果が出ないので、キャッチする。
+            # 千代田区大手町・丸の内・有楽町（大丸有）エリアのＡクラスビルの最大テナントは、金融機関から士業事務所・経営コンサルタントに──。
+            return '-', '-', '-', '-', '-'
         kaku_elements = kaku_analyse_result.split(':')[-1].split(';')
         kaku_elements_dic = {}
         for element in kaku_elements:
@@ -186,28 +191,31 @@ class GetNFudosanNews:
         # ガ格を取得
         ######################
         ga_kaku = kaku_elements_dic['ガ'][1]
-        try:  # if 'ヲ/U/-/-/-/-', can not convert to integer.
-            ga_kaku_tag_id = int(kaku_elements_dic['ガ'][2])
-        except ValueError:
-            ga_kaku_tag_id = None
-        ga_kaku_bnst_midasi = None
-        ga_kaku_bnst_id = None
-        for res in result._bnst:
-            for tag in res._tag_list._tag:
-                # '横浜/よこはま' + '市/し' のパターンと、'皆/みんな'のパターンでifを分岐させる.
-                # 前者の場合、+で区切られた後半を見るようにする.
-                # normalized_repname.split('/')[0] in ga_kaku -> リアルタ in リアルター のようにjuman? knp?が揺れを消しているため==じゃなくてinを使う
-                if ('+' not in tag.normalized_repname and ga_kaku in tag.midasi and tag.tag_id == ga_kaku_tag_id) or\
-                        ('+' in tag.normalized_repname and ga_kaku in tag.midasi and tag.tag_id == ga_kaku_tag_id):
-                    ga_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
-                    ga_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in ga_kaku_bnst_midasi_tmp])
-                    ga_kaku_bnst_id = res.bnst_id
-        ga_kaku_parent = self.contain_koyumeishi(ga_kaku_bnst_midasi)
-        for res in result._bnst:
-            if res.parent_id == ga_kaku_bnst_id:
-                ga_kaku_child = self.contain_koyumeishi(res.midasi)
-                if not (ga_kaku_parent and not ga_kaku_child):
-                    ga_kaku_bnst_midasi = res.midasi + ga_kaku_bnst_midasi
+        if ga_kaku != '-':
+            try:  # if 'ヲ/U/-/-/-/-', can not convert to integer.
+                ga_kaku_tag_id = int(kaku_elements_dic['ガ'][2])
+            except ValueError:
+                ga_kaku_tag_id = None
+            ga_kaku_bnst_midasi = None
+            ga_kaku_bnst_id = None
+            for res in result._bnst:
+                for tag in res._tag_list._tag:
+                    # '横浜/よこはま' + '市/し' のパターンと、'皆/みんな'のパターンでifを分岐させる.
+                    # 前者の場合、+で区切られた後半を見るようにする.
+                    # normalized_repname.split('/')[0] in ga_kaku -> リアルタ in リアルター のようにjuman? knp?が揺れを消しているため==じゃなくてinを使う
+                    if ('+' not in tag.normalized_repname and ga_kaku in tag.midasi and tag.tag_id == ga_kaku_tag_id) or\
+                            ('+' in tag.normalized_repname and ga_kaku in tag.midasi and tag.tag_id == ga_kaku_tag_id):
+                        ga_kaku_bnst_midasi_tmp = res.repname.split('+')  # res.repname: '特定/とくてい+目的/もくてき+会社/かいしゃ'
+                        ga_kaku_bnst_midasi = ''.join([x.split('/')[0] for x in ga_kaku_bnst_midasi_tmp])
+                        ga_kaku_bnst_id = res.bnst_id
+            ga_kaku_parent = self.contain_koyumeishi(ga_kaku_bnst_midasi)
+            for res in result._bnst:
+                if res.parent_id == ga_kaku_bnst_id:
+                    ga_kaku_child = self.contain_koyumeishi(res.midasi)
+                    if not (ga_kaku_parent and not ga_kaku_child):
+                        ga_kaku_bnst_midasi = res.midasi + ga_kaku_bnst_midasi
+        else:
+            ga_kaku_bnst_midasi = ga_kaku
 
         ######################
         # ヲ格を取得
